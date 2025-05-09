@@ -1,0 +1,139 @@
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| results: 'asis'
+
+library(leaflet)
+library(sf)
+library(dplyr)
+library(leaflet.extras)
+library(htmltools)
+
+# 1. ENVIRONMENT SETUP =================================================
+options(readr.show_progress = FALSE,
+        sf_use_s2 = FALSE,
+        htmltools.preserve.raw = FALSE)
+
+# 2. FILE VALIDATION ===================================================
+check_geojson <- function(path) {
+  if (!file.exists(path)) {
+    stop("File not found: ", path, 
+         "\nCurrent directory: ", getwd(),
+         "\nFiles available: ", paste(list.files(), collapse = ", "))
+  }
+  if (file.size(path) == 0) {
+    stop("Empty file detected: ", path)
+  }
+}
+
+tryCatch({
+  message("Verifying data files...")
+  check_geojson("squirrel.geojson")
+  check_geojson("historic.geojson")
+}, error = function(e) {
+  stop("FILE VALIDATION FAILED:\n", e$message)
+})
+
+# 3. DATA LOADING ======================================================
+
+message("Loading GeoJSON data...")
+squirrels <- load_silently("squirrel.geojson") %>% 
+  mutate(
+    coords = st_coordinates(.),
+    longitude = coords[,1],
+    latitude = coords[,2],
+    primary_fur_color = factor(primary_fur_color, 
+                             levels = c("Gray", "Cinnamon", "Black"),
+                             exclude = NULL)
+  )
+
+historic_districts <- load_silently("historic.geojson")
+
+# 4. MAP BUILDING ======================================================
+message("Building interactive map...")
+m <- leaflet(options = leafletOptions(zoomControl = TRUE,
+                                    attributionControl = FALSE)) %>%
+  
+  # Base Maps
+  addProviderTiles(providers$CartoDB.Positron, group = "Light") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+  
+  # Historic Districts
+  addPolygons(
+    data = historic_districts,
+    fillColor = ~colorFactor("Set3", area_name)(area_name),
+    fillOpacity = 0.7,
+    weight = 1,
+    color = "#444444",
+    highlightOptions = highlightOptions(weight = 3, color = "#666"),
+    popup = ~paste0("<h4>", area_name, "</h4>"),
+    group = "Historic Districts"
+  ) %>%
+  
+  # Squirrel Sightings
+  addCircleMarkers(
+    data = squirrels,
+    radius = ~ifelse(primary_fur_color == "Gray", 5, 7),  # Size variation
+    color = ~colorFactor(c("#808080", "#D2691E", "#000000"), 
+                        primary_fur_color)(primary_fur_color),
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    clusterOptions = markerClusterOptions(),  # Adds clustering
+    popup = ~paste0(
+      "<b>Fur Color:</b> ", primary_fur_color, "<br>",
+      "<b>Coordinates:</b> ", round(longitude, 4), ", ", round(latitude, 4)
+    ),
+    group = "Squirrels"
+  ) %>%
+  
+  # Controls
+  addLayersControl(
+    baseGroups = c("Light", "Satellite"),
+    overlayGroups = c("Historic Districts", "Squirrels"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  
+  addLegend(
+    position = "bottomright",
+    colors = c("#808080", "#D2691E", "#000000"),
+    labels = c("Gray", "Cinnamon", "Black"),
+    title = "Squirrel Fur Color",
+    opacity = 1
+  ) %>%
+  
+  # Extras
+  addScaleBar(position = "bottomleft") %>%
+  addFullscreenControl() %>%
+  addSearchOSM() %>%
+  addResetMapButton()
+
+# 5. OUTPUT GENERATION =================================================
+message("Generating output...")
+htmlwidgets::saveWidget(
+  m,
+  file = "nyc_squirrel_map.html",
+  selfcontained = TRUE,
+  title = "NYC Squirrel Sightings in Historic Districts",
+  background = "white",
+  knitrOptions = list(
+    screenshot.force = FALSE,
+    viewer.pane = FALSE
+  )
+)
+
+# 6. FINAL VALIDATION ==================================================
+if (file.exists("nyc_squirrel_map.html")) {
+  message("\nSUCCESS: Map generated at:\n",
+          normalizePath("nyc_squirrel_map.html"))
+  message("\nTo share:\n",
+          "1. Upload HTML + GeoJSON files together\n",
+          "2. For GitHub Pages, place in /docs folder\n",
+          "3. For ObservableHQ, drag-and-drop the HTML")
+  
+  # Auto-open in browser
+  if (interactive()) browseURL("nyc_squirrel_map.html")
+} else {
+  warning("Map file not created - check for errors")
+}
+```
