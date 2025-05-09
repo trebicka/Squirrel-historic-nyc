@@ -1,0 +1,91 @@
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+library(leaflet)
+library(sf)
+library(leaflet.extras)
+library(htmltools)
+
+# SUPPRESS GEOMETRY READING MESSAGES
+options(readr.show_progress = FALSE)
+options(sf_use_s2 = FALSE)
+
+# LOAD DATA SILENTLY ====================================================
+load_geojson <- function(path) {
+  suppressMessages({
+    data <- st_read(path, quiet = TRUE)
+    if (nrow(data) == 0) stop("File is empty: ", path)
+    return(data)
+  })
+}
+
+tryCatch({
+  squirrel_path <- "squirrel.geojson"  # Just filename - GitHub will resolve
+  historic_path <- "historic.geojson"
+  
+  message("Loading data...")  # User feedback
+  squirrels <- load_geojson(squirrel_path)
+  historic_districts <- load_geojson(historic_path)
+  
+}, error = function(e) {
+  stop("DATA LOADING FAILED:\n", e$message)
+})
+
+
+squirrel_coords <- as.data.frame(st_coordinates(squirrels))
+squirrels$longitude <- squirrel_coords$X
+squirrels$latitude <- squirrel_coords$Y
+
+squirrels$primary_fur_color <- factor(squirrels$primary_fur_color, 
+                                     levels = c("Gray", "Cinnamon", "Black"))
+
+# CREATE MAP 
+m <- leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron, group = "Light") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+  
+  addPolygons(
+    data = historic_districts,
+    fillColor = ~colorFactor("Set3", area_name)(area_name),
+    fillOpacity = 0.7,
+    color = "#444444",
+    weight = 1,
+    group = "Historic Districts",
+    popup = ~paste0("<strong>", area_name, "</strong>")
+  ) %>%
+  
+  addCircleMarkers(
+    data = squirrels,
+    radius = 5,
+    color = ~colorFactor(c("#808080", "#D2691E", "#000000"), primary_fur_color)(primary_fur_color),
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    group = "Squirrels",
+    popup = ~paste0(
+      "<strong>Fur Color: </strong>", primary_fur_color, "<br>",
+      "<strong>Location: </strong>", round(longitude, 4), ", ", 
+      round(latitude, 4)
+    )
+  ) %>%
+  
+  addLayersControl(
+    baseGroups = c("Light", "Satellite"),
+    overlayGroups = c("Historic Districts", "Squirrels")
+  ) %>%
+  
+  addLegend(
+    position = "bottomright",
+    colors = c("#808080", "#D2691E", "#000000"),
+    labels = c("Gray", "Cinnamon", "Black"),
+    title = "Squirrel Fur Color"
+  ) %>%
+  
+  leaflet.extras::addFullscreenControl() %>%
+  leaflet.extras::addSearchOSM() %>%
+  leaflet.extras::addResetMapButton()
+
+# DISPLAY MAP ===========================================================
+m
+```
