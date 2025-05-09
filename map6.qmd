@@ -10,8 +10,8 @@ library(leaflet.extras)
 library(htmltools)
 
 # Define file paths (using forward slashes for compatibility)
-squirrel_path <- "C:/Users/student/OneDrive - Hunter - CUNY/Documents/map6/squirrel.geojson"
-historic_path <- "C:/Users/student/OneDrive - Hunter - CUNY/Documents/map6/historic.districts.geojson"
+squirrel_path <- "squirrel.geojson"
+historic_path <- "historic.districts.geojson"
 
 # Load the GeoJSON files
 historic_districts <- st_read(historic_path)
