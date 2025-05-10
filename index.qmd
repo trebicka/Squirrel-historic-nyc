@@ -1,0 +1,82 @@
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-align: center
+#| output: true
+
+# Silently load packages
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(leaflet)
+  library(sf)
+})
+
+# Load and clean squirrel data
+squirrels <- st_read("squirrel.geojson", quiet = TRUE) %>% 
+  filter(!is.na(primary_fur_color)) %>%
+  mutate(
+    coords = st_coordinates(.),
+    longitude = coords[,1],
+    latitude = coords[,2],
+    primary_fur_color = factor(primary_fur_color, 
+                             levels = c("Gray", "Cinnamon", "Black"))
+  )
+
+# Load historic districts
+historic <- st_read("historic.geojson", quiet = TRUE) %>%
+  mutate(borough = as.factor(borough))
+
+# Create color palette for boroughs
+borough_pal <- colorFactor(
+  palette = c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"),
+  domain = historic$borough
+)
+
+# Create map
+m <- leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(
+    data = historic,
+    fillColor = ~borough_pal(borough),
+    fillOpacity = 0.7,
+    color = "white",
+    weight = 1,
+    popup = ~paste0("<b>", area_name, "</b><br>",
+                   "<b>Borough:</b> ", borough)
+  ) %>%
+  addCircleMarkers(
+    data = squirrels,
+    radius = 5,
+    color = ~case_when(
+      primary_fur_color == "Gray" ~ "#808080",
+      primary_fur_color == "Cinnamon" ~ "#D2691E",
+      TRUE ~ "#000000"
+    ),
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    popup = ~paste0(
+      "<b>Fur Color:</b> ", primary_fur_color, "<br>",
+      "<b>Location:</b> ", round(longitude, 4), ", ", round(latitude, 4))
+  ) %>%
+  addControl(
+    "<h3>NYC Squirrels in Historic Districts</h3>",
+    position = "topright"
+  ) %>%
+  addLegend(
+    colors = c("#808080", "#D2691E", "#000000"),
+    labels = c("Gray", "Cinnamon", "Black"),
+    title = "Squirrel Fur Color",
+    position = "bottomright"
+  ) %>%
+  addLegend(
+    pal = borough_pal,
+    values = historic$borough,
+    title = "Historic Districts by Borough",
+    position = "bottomleft"
+  )
+
+# Display the map
+m
+```
+
